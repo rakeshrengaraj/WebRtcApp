@@ -170,6 +170,12 @@ var messageHolder = document.querySelector("#messageHolder");
 var myMessage = document.querySelector("#myMessage");
 var sendMessage = document.querySelector("#sendMessage");
 
+var receivedFileName;
+var receivedFileSize;
+var fileBuffer = [];
+var fileSize = 0;
+var fileTransferring = false;
+
 function dataChannelStateChanged() {
 	console.log("Data Channel not openiii")
 	if (dataChannel.readyState === 'open') {
@@ -202,3 +208,43 @@ function appendChatMessage(msg, className) {
 	div.innerHTML = '<span>' + msg + '</span>';
 	messageHolder.appendChild(div);
 }
+
+/////////////File Transfer///////////
+var sendFile = document.querySelector("input#sendFile");
+var fileProgress = document.querySelector("progress#fileProgress");
+var downloadLink = document.querySelector('a#receivedFileLink');
+
+io.on('files', function(data) {
+	receivedFileName = data.filename;
+	receivedFileSize = data.filesize;
+	console.log("File on it's way is " + receivedFileName + " (" + receivedFileSize + ")");
+	fileTransferring = true;
+});
+
+sendFile.addEventListener('change', function(ev){
+	var file = sendFile.files[0];
+	console.log("sending file " + file.name + " (" + file.size + ") ...");
+	io.emit('files',{"filename":file.name, "filesize":file.size});
+	appendChatMessage("sending " + file.name, 'message-in');
+	fileTransferring = true;
+						
+	fileProgress.max = file.size;
+	var chunkSize = 16384;
+	var sliceFile = function(offset) {
+		var reader = new window.FileReader();
+		reader.onload = (function() {
+			return function(e) {
+				dataChannel.send(e.target.result);
+				if (file.size > offset + e.target.result.byteLength) {
+					window.setTimeout(sliceFile, 0, offset + chunkSize);
+				}
+				fileProgress.value = offset + e.target.result.byteLength;
+			};
+		})(file);
+		var slice = file.slice(offset, offset + chunkSize);
+		reader.readAsArrayBuffer(slice);
+	};
+	sliceFile(0);
+	fileTransferring = false;
+}, false);
+
