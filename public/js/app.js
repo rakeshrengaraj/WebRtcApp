@@ -102,6 +102,12 @@ callDoctor.addEventListener('click', function(ev){
 	patientUserName = patientName.value || 'no name';
 	io.emit('signal', {"user_type": "patient", "user_name": patientUserName, "user_data": "calling doctor", "command": "calldoctor"});
 	console.log("patient " + patientUserName + " is calling.");
+
+	
+	//Kick off the WebRTC signaling
+	//Setup the RTC Peer Connection object
+	if (!rtcPeerConn) startSignaling();
+
 	
 	ev.preventDefault();
 }, false);
