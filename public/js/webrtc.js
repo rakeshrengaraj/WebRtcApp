@@ -25,6 +25,12 @@ var rtcPeerConn;
 var mainVideoArea = document.querySelector("#mainVideoTag");
 var smallVideoArea = document.querySelector("#smallVideoTag");
 
+var dataChannelOptions = {
+	ordered: false, //no guaranteed delivery, unreliable but faster 
+	maxRetransmitTime: 1000, //milliseconds
+};
+var dataChannel;
+
 io.on('signal', function (data) {
 	if (data.user_type == "doctor" && data.command == "joinroom") {
 		console.log("The doctor is here!");
@@ -54,13 +60,13 @@ io.on('signal', function (data) {
 		if (message.sdp) {
 			rtcPeerConn.setRemoteDescription(new RTCSessionDescription(message.sdp), function () {
 				// if we received an offer, we need to answer
-				if (rtcPeerConn.remoteDescription.type == 'offer') {
+				if (rtcPeerConn.remoteDescription.type === 'offer') {
 					rtcPeerConn.createAnswer(sendLocalDesc, logError);
 				}
 			}, logError);
 		}
 		else {
-			rtcPeerConn.addIceCandidate(new RTCIceCandidate(message.candidate));
+				rtcPeerConn.addIceCandidate(new RTCIceCandidate(message.candidate));
 		}
 	}
 });
@@ -68,6 +74,7 @@ io.on('signal', function (data) {
 
 function startSignaling() {
 	console.log("starting signaling...");
+
 	rtcPeerConn = new webkitRTCPeerConnection(configuration);
 
 	// send any ice candidates to the other peer
@@ -90,7 +97,6 @@ function startSignaling() {
 		mainVideoArea.srcObject = evt.streams[0];
 		console.log("mainVideoArea.srcObject ")
 		console.log(mainVideoArea.srcObject)
-		console.log(evt)
 	};
 
 	// get a local stream, show it in our video tag and add it to be sent
@@ -106,6 +112,12 @@ function startSignaling() {
 		console.log(smallVideoArea.srcObject)
 		rtcPeerConn.addStream(stream);
 	}, logError);
+
+	dataChannel = rtcPeerConn.createDataChannel('textMessages', dataChannelOptions);
+				
+	dataChannel.onopen = dataChannelStateChanged;
+	rtcPeerConn.ondatachannel = receiveDataChannel;
+
 
 }
 
@@ -151,3 +163,42 @@ pauseMyVideo.addEventListener('click', function (ev) {
 	}
 	ev.preventDefault();
 }, false);
+
+
+/////////////Data Channels Code///////////
+var messageHolder = document.querySelector("#messageHolder");
+var myMessage = document.querySelector("#myMessage");
+var sendMessage = document.querySelector("#sendMessage");
+
+function dataChannelStateChanged() {
+	console.log("Data Channel not openiii")
+	if (dataChannel.readyState === 'open') {
+		console.log("Data Channel open");
+		dataChannel.onmessage = receiveDataChannelMessage;
+	}
+}
+
+function receiveDataChannel(event) {
+	console.log("Receiving a data channel");
+	dataChannel = event.channel;
+	dataChannel.onmessage = receiveDataChannelMessage;
+}
+
+function receiveDataChannelMessage(event) {
+	console.log("From DataChannel: " + event.data);
+	appendChatMessage(event.data, 'message-out');
+}
+
+sendMessage.addEventListener('click', function(ev){
+	dataChannel.send(myMessage.value);
+	appendChatMessage(myMessage.value, 'message-in');
+	myMessage.value = "";
+	ev.preventDefault();
+}, false);
+
+function appendChatMessage(msg, className) {
+	var div = document.createElement('div');
+	div.className = className;
+	div.innerHTML = '<span>' + msg + '</span>';
+	messageHolder.appendChild(div);
+}
