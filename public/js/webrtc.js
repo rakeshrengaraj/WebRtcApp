@@ -25,7 +25,7 @@ var rtcPeerConn;
 var mainVideoArea = document.querySelector("#mainVideoTag");
 var smallVideoArea = document.querySelector("#smallVideoTag");
 
-io.on('signal', function(data) {
+io.on('signal', function (data) {
 	if (data.user_type == "doctor" && data.command == "joinroom") {
 		console.log("The doctor is here!");
 		if (myUserType == "patient") {
@@ -62,36 +62,37 @@ io.on('signal', function(data) {
 		else {
 			rtcPeerConn.addIceCandidate(new RTCIceCandidate(message.candidate));
 		}
-	}	
-}); 
+	}
+});
 
 
 function startSignaling() {
 	console.log("starting signaling...");
 	rtcPeerConn = new webkitRTCPeerConnection(configuration);
-	
+
 	// send any ice candidates to the other peer
 	rtcPeerConn.onicecandidate = function (evt) {
 		if (evt.candidate)
-			io.emit('signal',{"user_type":"signaling", "command":"icecandidate", "user_data": JSON.stringify({ 'candidate': evt.candidate })});
+			io.emit('signal', { "user_type": "signaling", "command": "icecandidate", "user_data": JSON.stringify({ 'candidate': evt.candidate }) });
 		console.log("completed sending an ice candidate...");
 	};
-	
+
 	// let the 'negotiationneeded' event trigger offer generation
 	rtcPeerConn.onnegotiationneeded = function () {
 		console.log("on negotiation called");
 		rtcPeerConn.createOffer(sendLocalDesc, logError);
 	};
-	
+
 	// once remote stream arrives, show it in the main video element
-	rtcPeerConn.onaddstream = function (evt) {
+	rtcPeerConn.ontrack = function (evt) {
 		console.log("going to add their stream...");
 		// mainVideoArea.src = URL.createObjectURL(evt.stream);
+		mainVideoArea.srcObject = evt.streams[0];
 		console.log("mainVideoArea.srcObject ")
 		console.log(mainVideoArea.srcObject)
-		mainVideoArea.srcObject = evt.stream;
+		console.log(evt)
 	};
-	
+
 	// get a local stream, show it in our video tag and add it to be sent
 	navigator.getUserMedia = navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia;
 	navigator.getUserMedia({
@@ -105,15 +106,48 @@ function startSignaling() {
 		console.log(smallVideoArea.srcObject)
 		rtcPeerConn.addStream(stream);
 	}, logError);
-			  
+
 }
 
 function sendLocalDesc(desc) {
 	rtcPeerConn.setLocalDescription(desc, function () {
 		console.log("sending local description");
-		io.emit('signal',{"user_type":"signaling", "command":"SDP", "user_data": JSON.stringify({ 'sdp': rtcPeerConn.localDescription })});
+		io.emit('signal', { "user_type": "signaling", "command": "SDP", "user_data": JSON.stringify({ 'sdp': rtcPeerConn.localDescription }) });
 	}, logError);
 }
-			
+
 function logError(error) {
 }
+
+
+//////////MUTE/PAUSE STREAMS CODE////////////
+var muteMyself = document.querySelector("#muteMyself");
+var pauseMyVideo = document.querySelector("#pauseMyVideo");
+
+muteMyself.addEventListener('click', function (ev) {
+	console.log("muting/unmuting myself");
+	var streams = rtcPeerConn.getLocalStreams();
+	for (var stream of streams) {
+		for (var audioTrack of stream.getAudioTracks()) {
+			if (audioTrack.enabled) { muteMyself.innerHTML = "Unmute" }
+			else { muteMyself.innerHTML = "Mute Myself" }
+			audioTrack.enabled = !audioTrack.enabled;
+		}
+		console.log("Local stream: " + stream.id);
+	}
+	ev.preventDefault();
+}, false);
+
+pauseMyVideo.addEventListener('click', function (ev) {
+	console.log("pausing/unpausing my video");
+	var streams = rtcPeerConn.getLocalStreams();
+	for (var stream of streams) {
+		for (var videoTrack of stream.getVideoTracks()) {
+			if (videoTrack.enabled) { pauseMyVideo.innerHTML = "Start Video" }
+			else { pauseMyVideo.innerHTML = "Pause Video" }
+			videoTrack.enabled = !videoTrack.enabled;
+		}
+		console.log("Local stream: " + stream.id);
+	}
+	ev.preventDefault();
+}, false);
